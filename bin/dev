@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+if [ ! -f .env ]; then
+    echo "Advertencia: .env no encontrado. Creando copia desde .env.example con un secreto de sesion nuevo..."
+    SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+    sed "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=${SECRET}|" .env.example > .env
+fi
+
+echo "Iniciando entorno de desarrollo..."
+docker compose -f docker-compose.dev.yml up -d --build "$@"
+
+APP_PORT=$(grep -E '^APP_PORT=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || true)
+APP_PORT="${APP_PORT:-3000}"
+
+echo "--------------------------------------------------------"
+echo "Entorno local iniciado. Aplicacion en: http://localhost:${APP_PORT}"
+echo "Siguiente paso en una base nueva: ./bin/migrate && ./bin/seed"
+echo "Logs: ./bin/logs"
+echo "--------------------------------------------------------"

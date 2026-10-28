@@ -1,0 +1,91 @@
+name: CI (Validacion de Codigo)
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    name: Calidad (lint, tipos, tests, build, e2e)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/app
+      BETTER_AUTH_SECRET: ci-secreto-solo-para-pruebas-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3100
+      INITIAL_ADMIN_EMAIL: admin@example.com
+      INITIAL_ADMIN_PASSWORD: cambia-esta-clave-123
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Comprobacion de tipos
+        run: npm run typecheck
+
+      - name: Tests unitarios
+        run: npm test
+
+      - name: Migraciones y seed
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Build
+        run: npm run build
+
+      - name: Instalar navegador para e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests e2e (movil)
+        run: npm run test:e2e
+
+  docker:
+    name: Validar imagenes Docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Construir imagen de la app (sin publicar)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: runner
+          push: false
+
+      - name: Construir imagen de herramientas (sin publicar)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: tools
+          push: false
