@@ -1,0 +1,46 @@
+name: ${COMPOSE_PROJECT_NAME:-microapp}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      target: deps
+    command: npm run dev -- --hostname 0.0.0.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      APP_VERSION: dev
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - ./:/app:z
+      - app_node_modules:/app/node_modules
+      - app_next:/app/.next
+
+volumes:
+  postgres_data:
+  app_node_modules:
+  app_next:
